@@ -1,0 +1,11 @@
+producer_id,ingredient_id,region,price,qty,quality
+P1,riz,Analamanga,6000,150,0.9
+P2,riz,Itasy,5000,200,0.85
+P3,poisson,Toamasina,17500,80,0.88
+P4,poisson,Boeny,19000,60,0.9
+P5,légumes,Haute-Matsiatra,7500,120,0.92
+P6,poulet,Vakinankaratra,20000,50,0.86
+P7,oignon,Analamanga,11000,90,0.95
+P8,huile,Analamanga,15000,100,0.9
+P9,légumes,Analamanga,8500,150,0.93
+P10,poulet,Analamanga,19000,70,0.89

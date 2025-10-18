@@ -1,0 +1,11 @@
+recipe_name,ingredients_dict,expected_score
+Ravitoto sy henakisoa,"{'riz':0.2,'viande':0.3,'huile':0.05}",0.95
+Akoho amin'ny voanio,"{'poulet':0.4,'huile':0.05,'légumes':0.2}",0.93
+Lasary voatabia,"{'légumes':0.3,'huile':0.02,'oignon':0.05}",0.89
+Hen'omby ritra,"{'viande':0.35,'riz':0.2,'huile':0.05}",0.91
+Tilapia sauce tomate,"{'poisson':0.4,'légumes':0.25,'huile':0.05}",0.92
+Mofo gasy,"{'riz':0.15,'huile':0.03,'sucre':0.02}",0.87
+Koba ravina,"{'riz':0.2,'sucre':0.1,'huile':0.02}",0.88
+Soupe chinoise malagasy,"{'poulet':0.3,'légumes':0.25,'huile':0.04}",0.9
+Achard malagasy,"{'légumes':0.3,'huile':0.05,'oignon':0.05}",0.85
+Akoho sy pomme de terre,"{'poulet':0.35,'légumes':0.2,'huile':0.05}",0.94

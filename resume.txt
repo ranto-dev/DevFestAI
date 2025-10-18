@@ -11,3 +11,8 @@ pour le côté producteur de matière première (ingrédiant ou en quelque sort 
 . region dont il se trouve à madagascar
 
 une intélligence artificielle avec python
+
+
+
+le but de ce projet est de trouvez une recette dont on optimise (minimalise) le prix mais maximise la qualité nutritionnelle, alors est-ce que tu peux decrire les qualité nutritionnelle (fer, vitamine, etc... tout les paramètre pour convaincre l'utilisateur de sa qualité) pour chaque recette trouver par l'IA, avec l'indissage.
+je te demande aussi d'exporter le resultat (le meilleur recette trouver) sous forme donnée json et aussi de l'afficher dans le terminal. encore une fois, ce sont des recettes malgaches qu'on veut obtenir mais de bonne qualité nutricionnelle

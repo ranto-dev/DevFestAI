@@ -1,133 +1,254 @@
-from pulp import *
+# suggestion_recettes.py
+import random
+import math
 import pandas as pd
+import numpy as np
 
-INGREDIENTS_DATA = {
-    "Riz Blanc":   {"Prix_Unitaire": 0.20, "Calories": 350, "Protéines": 6.0, "Fibres": 1.0, "Sel": 0.0},
-    "Poulet":      {"Prix_Unitaire": 1.20, "Calories": 165, "Protéines": 31.0, "Fibres": 0.0, "Sel": 0.1},
-    "Lentilles":   {"Prix_Unitaire": 0.35, "Calories": 116, "Protéines": 9.0, "Fibres": 8.0, "Sel": 0.0},
-    "Carottes":    {"Prix_Unitaire": 0.10, "Calories": 41, "Protéines": 0.9, "Fibres": 2.8, "Sel": 0.05},
-    "Épices":      {"Prix_Unitaire": 5.00, "Calories": 300, "Protéines": 5.0, "Fibres": 10.0, "Sel": 1.0},
-}
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
 
-BUDGET_MAX_PLAT = 4.00
-PORTIONS = 1
-POIDS_TOTAL_MIN = 500
-POIDS_TOTAL_MAX = 80
+# pour l'allocation d'achat (optimisation linéaire)
+import pulp
 
-# Contraintes Nutritionnelles pour le PLAT ENTIER
-CALORIES_RECETTE_MIN = 800      # kcal
-PROTEINES_RECETTE_MIN = 60      # grammes
-SEL_RECETTE_MAX = 1.0           # grammes (faible pour une recette de 1 portions)
+# -------------------------
+# 1. Génération de données synthétiques (prototype)
+# -------------------------
+random.seed(0)
+np.random.seed(0)
 
-# Le "Score de Qualité" (Fonction Objectif) : Poids pour chaque nutriment (pour 100g)
-# On maximise Protéines et Fibres, et on pénalise fortement le Sel.
-QUALITE_POIDS = {"Protéines": 1.0, "Fibres": 1.5, "Sel": -5.0}
+# ingrédients catalogue (quelques ingrédients courants à Madagascar)
+ingredients = [
+    {"ingredient_id": "riz", "unite": "kg", "regions": ["Analamanga","Bongolava","Itasy"]},
+    {"ingredient_id": "poisson", "unite": "kg", "regions": ["Toamasina","Boeny","Analanjirofo"]},
+    {"ingredient_id": "légumes", "unite": "kg", "regions": ["Analamanga","Haute-Matsiatra","Itasy"]},
+    {"ingredient_id": "poulet", "unite": "kg", "regions": ["Analamanga","Alaotra","Vakinankaratra"]},
+    {"ingredient_id": "oignon", "unite": "kg", "regions": ["Analamanga","Itasy","Vakinankaratra"]},
+    {"ingredient_id": "huile", "unite": "litre", "regions": ["nationwide"]},
+]
 
-qualite_scores = {}
-for ingredient, data in INGREDIENTS_DATA.items():
-    score = (data["Protéines"] * QUALITE_POIDS["Protéines"] +
-             data["Fibres"] * QUALITE_POIDS["Fibres"] +
-             data["Sel"] * QUALITE_POIDS["Sel"])
-    qualite_scores[ingredient] = score
+df_ingredients = pd.DataFrame(ingredients)
 
-
-# --- 2. CRÉATION DU MODÈLE ET DES VARIABLES ---
-
-# Problème de maximisation de la qualité
-probleme = LpProblem("Optimisation_Recette_Journalière", LpMaximize)
-
-# Variables de décision: x[i] est la quantité d'ingrédient i (en unités de 100g)
-x = LpVariable.dicts("Qte_100g", INGREDIENTS_DATA.keys(), lowBound=0)
-
-
-# --- 3. FONCTION OBJECTIF (MAXIMISATION DE LA QUALITÉ) ---
-
-# Maximiser la somme des scores de qualité (pondérés par les quantités en 100g)
-probleme += lpSum(qualite_scores[i] * x[i] for i in INGREDIENTS_DATA.keys()), "Score de Qualité de la Recette"
-
-
-# --- 4. CONTRAINTES ---
-
-# A. Contrainte Budgétaire 💰
-probleme += lpSum(INGREDIENTS_DATA[i]["Prix_Unitaire"] * x[i] for i in INGREDIENTS_DATA.keys()) <= BUDGET_MAX_PLAT, "Budget Max du Plat"
-
-# B. Contraintes de Volume/Poids de la Recette (x[i] est en 100g)
-probleme += lpSum(x) * 100 >= POIDS_TOTAL_MIN, "Poids Min Total (g)"
-probleme += lpSum(x) * 100 <= POIDS_TOTAL_MAX, "Poids Max Total (g)"
-
-# C. Contraintes Nutritionnelles
-probleme += lpSum(INGREDIENTS_DATA[i]["Calories"] * x[i] for i in INGREDIENTS_DATA.keys()) >= CALORIES_RECETTE_MIN, "Calories Min Recette"
-probleme += lpSum(INGREDIENTS_DATA[i]["Protéines"] * x[i] for i in INGREDIENTS_DATA.keys()) >= PROTEINES_RECETTE_MIN, "Protéines Min Recette"
-probleme += lpSum(INGREDIENTS_DATA[i]["Sel"] * x[i] for i in INGREDIENTS_DATA.keys()) <= SEL_RECETTE_MAX, "Sel Max Recette"
-
-# D. Contraintes de Faisabilité et de Goût (pour garantir la variété)
-probleme += x["Carottes"] >= 1.0, "Min Carottes (100g)"     # Au moins 100g de carottes
-probleme += x["Poulet"] >= 1.5, "Min Poulet (100g)"         # Au moins 150g de poulet (pour 2)
-probleme += x["Épices"] <= 0.2, "Max Epices (100g)"         # Max 20g d'épices (quantité réaliste)
-probleme += x["Riz Blanc"] <= 3.0, "Max Riz (100g)"         # Max 300g de riz
-
-# --- 5. RÉSOUDRE LE PROBLÈME ---
-
-probleme.solve()
-
-# --- 6. AFFICHAGE DES RÉSULTATS DÉTAILLÉS ---
-
-print("=" * 50)
-print(f"ALGORITHME D'OPTIMISATION DE RECETTE (2 PORTIONS)")
-print(f"Statut de la résolution : {LpStatus[probleme.status]}")
-print(f"Score de Qualité Maximale Atteint : {value(probleme.objective):.2f}")
-print("=" * 50)
-print(f"CONTRAINTES : Budget Max {BUDGET_MAX_PLAT:.2f} € | Min Protéines {PROTEINES_RECETTE_MIN} g")
-print("-" * 50)
-print("RECETTE OPTIMALE (Quantités pour 2 Portions) :")
-print("-" * 50)
-
-results = []
-total_cout = 0
-total_calories = 0
-total_poids = 0
-total_proteines = 0
-total_fibres = 0
-total_sel = 0
-
-for v in probleme.variables():
-    if v.varValue > 0.001:
-        quantite_unit = v.varValue
-        quantite_g = quantite_unit * 100
-        aliment = v.name.replace("Qte_100g_", "").replace("_", " ")
-        data = INGREDIENTS_DATA[aliment]
-
-        cout = quantite_unit * data["Prix_Unitaire"]
-        calories = quantite_unit * data["Calories"]
-        proteines = quantite_unit * data["Protéines"]
-        fibres = quantite_unit * data["Fibres"]
-        sel = quantite_unit * data["Sel"]
-
-        results.append({
-            "Ingrédient": aliment,
-            "Quantité (g)": f"{quantite_g:.0f}",
-            "Coût (€)": f"{cout:.2f}",
-            "Protéines (g)": f"{proteines:.1f}",
-            "Fibres (g)": f"{fibres:.1f}",
-            "Sel (g)": f"{sel:.2f}"
+# Générer des producteurs
+producers = []
+producer_id = 1
+regions_all = ["Analamanga","Toamasina","Itasy","Bongolava","Boeny","Alaotra","Haute-Matsiatra","Analanjirofo","Vakinankaratra"]
+for ing in df_ingredients['ingredient_id']:
+    # 3 à 6 producteurs par ingrédient
+    for _ in range(random.randint(3,6)):
+        region = random.choice(regions_all)
+        price = round(random.uniform(0.5, 5.0), 2)  # prix unitaire arbitraire (ex: X MGA / unité)
+        qty = round(random.uniform(10, 200), 1)     # kg ou litres disponibles
+        quality = round(random.uniform(0.5, 1.0), 2)  # 0..1
+        producers.append({
+            "producer_id": f"P{producer_id}",
+            "ingredient_id": ing,
+            "region": region,
+            "price": price,
+            "qty": qty,
+            "quality": quality
         })
+        producer_id += 1
+df_producers = pd.DataFrame(producers)
 
-        total_cout += cout
-        total_calories += calories
-        total_poids += quantite_g
-        total_proteines += proteines
-        total_fibres += fibres
-        total_sel += sel
+# Générer recettes de base (quelques recettes traditionnelles simplifiées)
+recipes = [
+    {"id": "R1", "name": "Riz au poisson", "ingredients": {"riz":0.2, "poisson":0.2, "oignon":0.05, "huile":0.02}, "time":30},
+    {"id": "R2", "name": "Ravitoto (avec viande)", "ingredients": {"riz":0.2, "légumes":0.25, "poulet":0.15, "oignon":0.05, "huile":0.02}, "time":45},
+    {"id": "R3", "name": "Riz sauté légumes", "ingredients": {"riz":0.2, "légumes":0.3, "oignon":0.05, "huile":0.02}, "time":25},
+    {"id": "R4", "name": "Poisson grillé + riz", "ingredients": {"riz":0.2, "poisson":0.25, "oignon":0.03, "huile":0.02}, "time":35},
+    {"id": "R5", "name": "Poulet au riz", "ingredients": {"riz":0.2, "poulet":0.25, "oignon":0.04, "huile":0.03}, "time":50},
+]
 
-# Affichage des résultats dans un tableau
-df = pd.DataFrame(results).set_index("Ingrédient")
-print(df)
-print("-" * 50)
+df_recipes = pd.DataFrame(recipes)
 
-print("Bilan Nutritionnel et Coût du Plat Final :")
-print(f"  💰 Coût Total : {total_cout:.2f} € (Coût/portion: {total_cout / PORTIONS:.2f} €)")
-print(f"  ⚖️ Poids Total : {total_poids:.0f} g")
-print(f"  🔥 Calories Totales : {total_calories:.0f} kcal (Cible: {CALORIES_RECETTE_MIN}+)")
-print(f"  💪 Protéines Totales : {total_proteines:.1f} g (Cible: {PROTEINES_RECETTE_MIN}+)")
-print(f"  🌱 Fibres Totales : {total_fibres:.1f} g")
-print(f"  🧂 Sel Total : {total_sel:.2f} g (Max: {SEL_RECETTE_MAX})")
+# -------------------------
+# 2. Construire des features synthétiques et un "score qualité" à apprendre
+# -------------------------
+# Pour chaque recette, nous calculons des features dépendant du marché moyen:
+def compute_market_summary_for_recipe(recipe, producers_df):
+    # moyenne du prix par ingrédient (sur tous les producteurs)
+    ing_stats = {}
+    for ing, qty in recipe['ingredients'].items():
+        dfp = producers_df[producers_df['ingredient_id']==ing]
+        if dfp.shape[0]==0:
+            # ingrédient absent -> pénalité
+            ing_stats[ing] = {"price_mean": 999, "quality_mean": 0, "availability": 0}
+        else:
+            ing_stats[ing] = {
+                "price_mean": dfp['price'].mean(),
+                "quality_mean": dfp['quality'].mean(),
+                "availability": dfp['qty'].sum()
+            }
+    return ing_stats
+
+# créer dataset d'entraînement synthétique: on simule plusieurs "marchés" aléatoires (variantes de producteurs)
+train_rows = []
+for market_variant in range(200):
+    # perturber légèrement les prix/qualités
+    dfp = df_producers.copy()
+    dfp['price'] = (dfp['price'] * np.random.normal(1.0, 0.15, size=len(dfp))).clip(0.1, None)
+    dfp['quality'] = dfp['quality'].apply(lambda x: min(1.0, max(0.2, x + np.random.normal(0,0.08))))
+    # for each recipe compute features and a synthetic "quality score"
+    for _, rec in df_recipes.iterrows():
+        stats = compute_market_summary_for_recipe(rec, dfp)
+        total_cost = 0.0
+        weighted_quality = 0.0
+        availability_flag = 1.0
+        for ing, qty in rec['ingredients'].items():
+            ps = stats[ing]['price_mean']
+            qs = stats[ing]['quality_mean']
+            av = stats[ing]['availability']
+            total_cost += ps * qty
+            weighted_quality += qs * qty
+            if av < qty:  # not enough stock
+                availability_flag = 0.0
+        # synthetic quality score: combines ingredient quality, inverse cost, time factor, availability
+        base_quality = (weighted_quality / sum(rec['ingredients'].values())) * availability_flag
+        cost_penalty = 1 / (1 + math.log1p(total_cost))
+        time_penalty = 1 / (1 + rec['time']/60)  # prefer faster
+        # add some noise
+        score = (0.6 * base_quality + 0.3 * cost_penalty + 0.1 * time_penalty) + np.random.normal(0,0.02)
+        score = float(max(0.0, min(1.0, score)))
+        row = {
+            "recipe_id": rec['id'],
+            "recipe_time": rec['time'],
+            "cost_estimate": total_cost,
+            "weighted_quality": weighted_quality,
+            "availability_flag": availability_flag,
+            "score": score
+        }
+        # add per-ingredient price and quality as features (flatten)
+        for ing in df_ingredients['ingredient_id']:
+            row[f"price_{ing}"] = stats.get(ing, {}).get('price_mean', 999)
+            row[f"quality_{ing}"] = stats.get(ing, {}).get('quality_mean', 0)
+            row[f"avail_{ing}"] = stats.get(ing, {}).get('availability', 0)
+        train_rows.append(row)
+
+df_train = pd.DataFrame(train_rows)
+
+# -------------------------
+# 3. Entraînement d'un modèle simple pour prédire le score
+# -------------------------
+feature_cols = [c for c in df_train.columns if c not in ['score','recipe_id']]
+X = df_train[feature_cols]
+y = df_train['score']
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+
+model = RandomForestRegressor(n_estimators=100, random_state=0)
+model.fit(X_train, y_train)
+print("Model trained. Test R2:", model.score(X_test, y_test))
+
+# -------------------------
+# 4. Fonction d'inférence & allocation d'achat
+# -------------------------
+def suggest_recipes_for_user(user_region, user_budget, df_recipes, df_producers_current, model, top_k=3):
+    suggestions = []
+    # pour chaque recette calculer features selon marché actuel (df_producers_current)
+    for _, rec in df_recipes.iterrows():
+        stats = compute_market_summary_for_recipe(rec, df_producers_current)
+        total_cost = 0.0
+        weighted_quality = 0.0
+        availability_flag = 1.0
+        for ing, qty in rec['ingredients'].items():
+            ps = stats[ing]['price_mean']
+            qs = stats[ing]['quality_mean']
+            av = stats[ing]['availability']
+            total_cost += ps * qty
+            weighted_quality += qs * qty
+            if av < qty:
+                availability_flag = 0.0
+        # prepare feature vector
+        row = {
+            "recipe_time": rec['time'],
+            "cost_estimate": total_cost,
+            "weighted_quality": weighted_quality,
+            "availability_flag": availability_flag
+        }
+        for ing in df_ingredients['ingredient_id']:
+            row[f"price_{ing}"] = stats.get(ing, {}).get('price_mean', 999)
+            row[f"quality_{ing}"] = stats.get(ing, {}).get('quality_mean', 0)
+            row[f"avail_{ing}"] = stats.get(ing, {}).get('availability', 0)
+        X_row = pd.DataFrame([row])[feature_cols]
+        pred_score = float(model.predict(X_row)[0])
+        # check budget constraint: we interpret user_budget as max cost per daily meal
+        if total_cost <= user_budget and availability_flag>0:
+            suggestions.append({
+                "recipe_id": rec['id'],
+                "name": rec['name'],
+                "predicted_score": pred_score,
+                "cost_estimate": total_cost,
+                "ingredients": rec['ingredients']
+            })
+    # sort by predicted_score desc
+    suggestions = sorted(suggestions, key=lambda x: x['predicted_score'], reverse=True)
+    # For each suggestion, compute optimized allocation among producers (min cost)
+    final_suggestions = []
+    for s in suggestions[:top_k]:
+        allocation, total_cost_alloc = optimize_purchase_allocation(s['ingredients'], df_producers_current, user_region)
+        s['allocation'] = allocation
+        s['total_cost_alloc'] = total_cost_alloc
+        final_suggestions.append(s)
+    return final_suggestions
+
+def optimize_purchase_allocation(ingredients_needed, producers_df, user_region):
+    # Simple linear program: minimize cost sum(price_i * x_i)
+    # subject to: sum x_i >= qty_needed for each ingredient, 0 <= x_i <= producer_qty
+    # optional: prefer local producers (same region) by tiny cost bonus
+    prob = pulp.LpProblem("min_cost", pulp.LpMinimize)
+    # variables x_producer = qty bought from that producer
+    var_dict = {}
+    for idx, p in producers_df.iterrows():
+        pid = p['producer_id']
+        var_dict[pid] = pulp.LpVariable(f"x_{pid}", lowBound=0, upBound=p['qty'], cat='Continuous')
+    # objective
+    cost_terms = []
+    for idx, p in producers_df.iterrows():
+        pid = p['producer_id']
+        price = p['price']
+        # small discount for same-region producers -> encourage local purchases:
+        local_bonus = -0.01 if p['region'] == user_region else 0.0
+        cost_terms.append((price + local_bonus) * var_dict[pid])
+    prob += pulp.lpSum(cost_terms)
+    # constraints per ingredient
+    for ing, qty_needed in ingredients_needed.items():
+        prob += pulp.lpSum([var_dict[p['producer_id']] for _, p in producers_df[producers_df['ingredient_id']==ing].iterrows()]) >= qty_needed
+    # solve
+    prob.solve(pulp.PULP_CBC_CMD(msg=0))
+    allocation = {}
+    total_cost = 0.0
+    for _, p in producers_df.iterrows():
+        pid = p['producer_id']
+        val = var_dict[pid].varValue if var_dict[pid].varValue is not None else 0.0
+        if val > 1e-6:
+            allocation[pid] = {"ingredient_id": p['ingredient_id'], "qty": round(val,3), "price": p['price'], "region": p['region']}
+            total_cost += val * p['price']
+    return allocation, round(total_cost,3)
+
+# -------------------------
+# 5. Exemple d'utilisation (marché actuel = df_producers, utilisateur)
+# -------------------------
+# Simuler marché courant (peut être simplement df_producers)
+df_producers_current = df_producers.copy()
+
+# Exemple utilisateur
+user_region = "Analamanga"
+user_budget = 1.5  # budget par recette (ex: 1.5 unités monétaires)
+
+suggestions = suggest_recipes_for_user(user_region=user_region, user_budget=user_budget,
+                                       df_recipes=df_recipes, df_producers_current=df_producers_current,
+                                       model=model, top_k=3)
+
+print("\nSuggestions pour l'utilisateur (region={}, budget={}):\n".format(user_region, user_budget))
+for s in suggestions:
+    print(f"- {s['name']} (score attendu {s['predicted_score']:.3f}) -> coût estimé {s['total_cost_alloc']:.2f}")
+    print("  Ingrédients:", s['ingredients'])
+    print("  Allocation (producteur: qty @ price):")
+    for pid, alloc in s['allocation'].items():
+        print(f"    {pid} : {alloc['ingredient_id']} {alloc['qty']} @ {alloc['price']} (region {alloc['region']})")
+    print("")
+
+# Le script affiche des suggestions et allocations.
