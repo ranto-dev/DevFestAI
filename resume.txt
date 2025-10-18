@@ -1,0 +1,13 @@
+un programme IA permettant de prédire et de suggerer des recettes malgache de meilleur qualité à partir des ingrédiant dont les ingrediants dépend des parametres suivante:
+
+pour le côté utilisateur
+. son budget par jour pour son nutrition journalière
+. la region dont il se trouve à madagascar
+
+pour le côté producteur de matière première (ingrédiant ou en quelque sort "les element dans le marché" ) qui sont des personnes 
+. son production
+. la quantité de son produit qui est déjà près pour la production d'une recette
+. prix de son produit (unitaire)
+. region dont il se trouve à madagascar
+
+une intélligence artificielle avec python
