@@ -62,10 +62,10 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 model = RandomForestRegressor(n_estimators=300, random_state=42, max_depth=10)
 model.fit(X_train, y_train)
 
-print(f"✅ Données importées :")
+print(f"Données importées :")
 print(f"- {len(df_producers)} producteurs")
 print(f"- {len(df_recipes)} recettes")
-print(f"📈 Performance du modèle R² : {model.score(X_test, y_test):.2f}\n")
+print(f"Performance du modèle R² : {model.score(X_test, y_test):.2f}\n")
 
 def predict_recipe(ingredients_dict, budget):
     cost = compute_cost(ingredients_dict)
@@ -74,7 +74,7 @@ def predict_recipe(ingredients_dict, budget):
     return pred, cost, nutrition
 
 def suggest_recipes(region, budget):
-    print(f"💡 Meilleures suggestions pour la région {region} avec un budget de {budget:,.0f} {CURRENCY} :\n")
+    print(f"Meilleures suggestions pour la région {region} avec un budget de {budget:,.0f} {CURRENCY} :\n")
     suggestions = []
 
     for _, rec in df_recipes.iterrows():
@@ -108,10 +108,12 @@ def suggest_recipes(region, budget):
         "score_pred": best["pred_score"]
     }
 
-    with open("resultat_meilleur.json", "w", encoding="utf-8") as f:
-        json.dump(best_data, f, ensure_ascii=False, indent=4)
+    # with open("resultat_meilleur.json", "w", encoding="utf-8") as f:
+    #     json.dump(best_data, f, ensure_ascii=False, indent=4)
 
-    print("✅ Meilleure recette exportée sous forme JSON :\n")
-    print(json.dumps(best_data, ensure_ascii=False, indent=4))
+    # print("Meilleure recette exportée sous forme JSON :\n")
+    # print(json.dumps(best_data, ensure_ascii=False, indent=4))
+
+    print(f"La meilleur recette trouvée: {best_data}")
 
 suggest_recipes(region="Analamanga", budget=1500)
